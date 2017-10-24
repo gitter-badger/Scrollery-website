@@ -91,7 +91,7 @@ function load_fragment_text(selected_frag)
                     {
                         return;
                     }
-                    
+                    Spider.addRichTextEditor();
                     Spider.notifyChangedText(data);
                 },
                 function()
