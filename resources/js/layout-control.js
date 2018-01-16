@@ -23,8 +23,8 @@ var transitionEvent = whichTransitionEvent();
 
 $(document).ready(function () {
   // Read initial vertical and horizontal divider position from CSS
-  verticalDivide = getCssHeight('#single-image-container');
-  horizontalDivide = getCssWidth('#single-image-container');
+  verticalDivide = 70; // getCssHeight('#single-image-container');
+  horizontalDivide = 50; // getCssWidth('#single-image-container');
 
   // Setup event listeners
   $('.toggle-nav').click(function () { //Toggle the side bar menu on-off

@@ -1,31 +1,17 @@
-/** general */
+/* TODO remove outdated entries */
 
-.bordered
+/** layout */
+
+.oneLine
 {
-	border: 1px solid black;
+	display: table;
+	padding: 2px;
 }
 
-.borderedButTop
+.oneLineContent
 {
-	border-top: 0px;
-	border-right: 1px solid black;
-	border-bottom: 1px solid black;
-	border-left: 1px solid black;
-}
-
-.greyBordered
-{
-	border: 1px solid darkgrey;
-}
-
-.scrollable
-{
-	overflow: auto;
-}
-
-.bold
-{
-	font-weight: bold; 
+	display: table-cell;
+	padding: 2px;
 }
 
 .hidden
@@ -33,26 +19,24 @@
 	display: none;
 }
 
-.warning
+.asSlimAsPossible
 {
-	font-weight: bold;
-	color: red;
+	display: inline-block;
 }
 
-.padded
+.width14
 {
-	padding: 5px;
+	width: 14px;
 }
 
-.protectedLineBreaks
+.fullWidth
 {
-	white-space: pre;
+	width: 100%;
 }
 
-.discreetLine
+.fullWidthMinus4
 {
-	border: 0;
-	border-bottom: 1px dotted gray;
+	width: calc(100% - 4px);
 }
 
 .fillingMostHeight
@@ -65,18 +49,122 @@
 	height: calc(100vh - 69px); /** fillingMostHeight +20 removed headline's height +2*5 its padding +1 border +10 ??? */
 }
 
-.contentField
+.slightlyPadded
 {
-	margin: 0px;
+    padding: 2px;
+}
+
+.padded
+{
 	padding: 5px;
 }
+
+.protectedLineBreaks
+{
+	white-space: pre;
+}
+
+/** borders */
+
+.bordered
+{
+	border: 1px solid black;
+}
+
+.borderedButTop
+{
+	border-top: 0;
+	border-right: 1px solid black;
+	border-bottom: 1px solid black;
+	border-left: 1px solid black;
+}
+
+.greyBordered
+{
+	border: 1px solid darkgrey;
+}
+
+.greyTopBordered
+{
+	border-top: 1px solid darkgrey;
+}
+
+.greyBottomBordered
+{
+	border-bottom: 1px solid darkgrey;
+}
+
+.greyDashedBottomBordered
+{
+	border-bottom: 1px dashed darkgrey;
+}
+
+.lightBlueThickBordered
+{
+	border: 2px solid lightblue;
+}
+
+.collapseBorders
+{
+	border-collapse: collapse;
+}
+
+/** text format */
+
+.mediumFontSize
+{
+	font-size: 14px;
+}
+
+.largeFontSize
+{
+	font-size: 20px;
+}
+
+.bold
+{
+	font-weight: bold;
+}
+
+/** colors */
 
 .green
 {
 	color: darkgreen;
 }
 
-.pointerMouse /* TODO use this one for the various elements with a pointer mouse*/
+.burlyWoodBackground
+{
+	background-color: burlywood;
+}
+
+
+/** other general things */
+
+.scrollable
+{
+	overflow: auto;
+}
+
+.warning
+{
+	font-weight: bold;
+	color: red;
+}
+
+.discreetLine
+{
+	border: 0;
+	border-bottom: 1px dotted gray;
+}
+
+.contentField
+{
+	margin: 0;
+	padding: 5px;
+}
+
+.pointerMouse /* TODO use this one for the various elements with a pointer mouse */
 {
 	cursor: pointer;
 }
@@ -96,14 +184,9 @@
 	margin-left: 10px;
 }
 
-.mediumFontSize
+.chosenContent
 {
-	font-size: 14px;
-}
-
-.largeFontSize
-{
-	font-size: 28px;
+	border: 2px solid lightblue;
 }
 
 
@@ -165,7 +248,7 @@
 .tab
 {
 	display: table-cell;
-	min-width: 0px;
+	min-width: 0;
 	
 	padding: 3px;
 	
@@ -195,6 +278,7 @@
 	margin: auto;
 }
 
+
 /** text input */
 
 .textField
@@ -203,7 +287,7 @@
 	resize: none;
 	
 	float: left;
-	margin: 0px;
+	margin: 0;
 	padding: 5px;
 	
 	font-size: 16px;
@@ -272,7 +356,7 @@
 	border-right: 1px solid black;
 	border-bottom: 1px solid black;
 	
-	margin: 0px;
+	margin: 0;
 	
 	text-align: center;
 }
@@ -404,25 +488,31 @@
 	white-space: normal; /* overwrites value pre of parent */
 }
 
-.addLineByUser
+.manageLine
 {
 	padding-right: 4px;
 	padding-left: 4px;
-	
+
 	cursor: pointer;
-	color: darkgreen;
 }
 
 .removeLineByUser
 {
-	padding-right: 4px;
-	padding-left: 4px;
-	
-	cursor: pointer;
 	color: darkred;
 }
 
-/** different annotations */
+.addLineByUser
+{
+	color: darkgreen;
+}
+
+.addLineAtBegin
+{
+	color: darkblue;
+}
+
+
+/** text attributes */
 
 .aboveLine
 {
@@ -509,55 +599,9 @@
 
 /** single sign editor */
 
-.chosenSign
+.modifiedReadingSSE::after
 {
-	font-size: 48px;
-}
-
-.otherSign
-{
-	font-size: 28px;
-	
-	cursor: pointer;
-}
-
-.modifiedSign
-{
-	color: darkorange;
-}
-
-.signDescription
-{
-	font-size: 10px;
-}
-
-.attributesContainer
-{
-	float: left;
-	
-	width: 45%;
-	
-	border: 1px solid black;
-	
-	margin-right: calc(4%);
-}
-
-.attributesList
-{
-	height: 160px;
-	
-	padding: 4px;
-}
-
-.attributesListHeadline
-{
-	border-bottom: 1px solid black;
-	
-	line-height: 20px;
-	padding: 4px;
-}
-
-.attribute
-{
-	cursor: pointer;
+    vertical-align: super;
+    content: '*';
+    font-size: 14px;
 }

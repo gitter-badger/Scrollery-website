@@ -1,6 +1,9 @@
-function SignVisualisation()
+function SignVisualisation(richTextEditor)
 {
-	this.fontSize = 20; // TODO move all of rte's dependence on font size to here
+	this.richTextEditor = richTextEditor;
+	const self = this;
+
+	this.fontSize = 20;
 
 	this.signType2Visualisation =
 	{
@@ -45,6 +48,68 @@ function SignVisualisation()
 		return typeName;
 	};
 
+	this.addLineByUser = function(lineIndex, lineName, newLineAmount) // TODO move to rte gui
+	{
+		/** increment indexes of lines following the new one */
+
+		for (var iLine = newLineAmount - 1; iLine >= lineIndex; iLine--) // increment the indexes of each following line
+		{
+			const incrementedIndex = iLine + 1;
+
+			$('#line'            + iLine).attr('id', 'line'            + incrementedIndex);
+			$('#lineName'        + iLine).attr('id', 'lineName'        + incrementedIndex);
+
+			$('#rightMargin'     + iLine).attr('id', 'rightMargin'     + incrementedIndex);
+			$('#regularLinePart' + iLine).attr('id', 'regularLinePart' + incrementedIndex);
+			$('#leftMargin'      + iLine).attr('id', 'leftMargin'      + incrementedIndex);
+
+			$('#removeLine'      + iLine).attr('id', 'removeLine'      + incrementedIndex);
+			$('#addLineAfter'    + iLine).attr('id', 'addLineAfter'    + incrementedIndex);
+		}
+
+		/** add new line */
+
+		const line = self.createLine
+		(
+			lineIndex,
+			lineName
+		);
+
+		if (lineIndex == 0)
+		{
+			line.insertAfter('#dummyLine');
+		}
+		else
+		{
+			line.insertAfter('#line' + (lineIndex - 1));
+		}
+
+		$('#removeLine'   + lineIndex).show();
+		$('#addLineAfter' + lineIndex).show();
+	};
+
+	this.removeLineByUser = function(lineIndex, newLineAmount) // TODO move to rte gui
+	{
+		$('#line' + lineIndex).remove();
+
+		/** decrement indexes of lines following the removed one */
+
+		for (var iLine = lineIndex + 1; iLine <= newLineAmount; iLine++)
+		{
+			const decrementedIndex = iLine - 1;
+
+			$('#line'            + iLine).attr('id', 'line'            + decrementedIndex);
+			$('#lineName'        + iLine).attr('id', 'lineName'        + decrementedIndex);
+
+			$('#rightMargin'     + iLine).attr('id', 'rightMargin'     + decrementedIndex);
+			$('#regularLinePart' + iLine).attr('id', 'regularLinePart' + decrementedIndex);
+			$('#leftMargin'      + iLine).attr('id', 'leftMargin'      + decrementedIndex);
+
+			$('#removeLine'      + iLine).attr('id', 'removeLine'      + decrementedIndex);
+			$('#addLineAfter'    + iLine).attr('id', 'addLineAfter'    + decrementedIndex);
+		}
+	};
+
 	this.changeWidthOfSpan = function(span, width)
 	{
 		span.css
@@ -54,12 +119,12 @@ function SignVisualisation()
 		});
 	};
 
-	this.changeWidth = function(iLine, iSign, width)
+	this.changeWidth = function(iLine, iSign, width) // TODO move to rte gui?
 	{
 		this.changeWidthOfSpan($('#span_' + iLine + '_' + iSign), width);
 	};
 
-	this.repositionChar = function(iLine, iSign, positionData, span, addToEndOfLine)
+	this.repositionChar = function(iLine, iSign, positionData, span, addToEndOfLine) // TODO move to rte gui
 	{
 		var verticalPositionInLine = null;
 		var horizontalMargin = null;
@@ -216,5 +281,22 @@ function SignVisualisation()
 		}
 	};
 
-	// TODO reconstructed, corrections etc.
+	this.showBinaryAttribute = function(iLine, iSign, attributeName, isSet)
+	{
+		const span = $('#span_' + iLine + '_' + iSign);
+
+		if (isSet)
+		{
+			span.addClass(attributeName);
+		}
+		else
+		{
+			span.removeClass(attributeName);
+		}
+	};
+
+	// TODO corrections etc.
+
+
+
 }

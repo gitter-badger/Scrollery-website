@@ -105,7 +105,7 @@ function Spider() // singleton central component communication system
 	
 	this.notifyChangedText = function(json)
 	{
-		this.richTextEditor.displayModel(json);
+		this.richTextEditor.showRichTextEditor(json);
 	};
 	
 	// TODO support for multiple rich text editors with add & remove methods?

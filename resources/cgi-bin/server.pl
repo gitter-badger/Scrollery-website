@@ -15,7 +15,7 @@ use CGI;
 use JSON;
 
 
-# helper functions
+# HELPER FUNCTIONS
 
 sub query_SQE
 {
@@ -80,8 +80,63 @@ sub lastInsertedId_SQE
 	);
 }
 
+sub _set_scrollversion
+{
+	my $cgi = shift;
 
-# functions related to client requests
+	my $scroll_version_id = $cgi->param('SCROLLVERSION');
+	if (!defined $scroll_version_id)
+	{
+		$scroll_version_id = 1;
+	}
+	$cgi->dbh->set_scrollversion($scroll_version_id);
+}
+
+sub _get_fragment_id_from_canonical_reference_id
+{
+	my $cgi = shift;
+
+	return query_SQE
+	(
+		$cgi,
+		'first_value',
+
+		<<'MYSQL',
+		SELECT col_id FROM scroll_to_col
+		WHERE scroll_to_col_id =
+		(
+			SELECT column_of_scroll_id FROM discrete_canonical_references
+			WHERE discrete_canonical_reference_id = ?
+		)
+MYSQL
+
+		scalar $cgi->param('canonicalFragId')
+	);
+}
+
+sub _get_sign_stream_and_start_sign
+{
+	my $dbh = shift;
+	my $fragment_id = shift;
+
+	#	my $get_start_query = $dbh->prepare_sqe(SQE_API::Queries::GET_LINE_BREAK,$line_index_to_remove);
+	my $get_start_query = $dbh->prepare_sqe(SQE_API::Queries::GET_FRAGMENT_BREAK);
+
+	my $sign_stream = $dbh->create_sign_stream_for_fragment_id($fragment_id);
+	#	$cgi->print('$sign_stream'.Dumper($sign_stream));
+	#	$get_start_query->execute($fragment_id, 'LINE_START');
+	#	my $start_sign_id = ($get_start_query->fetchrow_array)[0];
+	#	$cgi->print('{"$start_sign_id":'.$start_sign_id.'}');
+	#	return;
+	$get_start_query->execute($fragment_id, 'COLUMN_START');
+	my $start_sign_id = ($get_start_query->fetchrow_array)[0];
+	$sign_stream->set_start_id($start_sign_id);
+
+	return ($sign_stream, $start_sign_id);
+}
+
+
+# FUNCTIONS RELATED TO CLIENT REQUESTS
 
 # returns session & user id; most work is covered by SQE_CGI.pm 
 sub login
@@ -760,6 +815,784 @@ sub remove_attribute
 	{
 		$cgi->print('{"error":"'.${$result[1]}[1].'"}');
 	}
+}
+
+sub add_line
+{
+	my $cgi = shift;
+	my $dbh = $cgi->dbh;
+	my $line_index_to_insert = $cgi->param('newLineIndex');
+
+	my $scroll_version_id = $cgi->param('SCROLLVERSION');
+	if (!defined $scroll_version_id)
+	{
+		$scroll_version_id = 1;
+	}
+	$dbh->set_scrollversion($scroll_version_id);
+
+	my ($sign_stream, $start_sign_id) = _get_sign_stream_and_start_sign
+	(
+		$dbh,
+		_get_fragment_id_from_canonical_reference_id($cgi)
+	);
+
+	# search for position where to insert
+
+	my $sign_id_before_line;
+	my $stream_id_before_line;
+	my $sign_char_id_before_line;
+
+	my $start_break_type;
+	if ($line_index_to_insert == 0)
+	{
+
+
+	}
+	else # search through stream for begin of nth line
+	{
+		my $sign_scalar; # as scalar first for simple check whether existent
+		my @sign;
+
+		my $is_line_start = 0;
+		my $line_counter = 0;
+		my $line_start_sign_char_id;
+
+		while ($sign_scalar = $sign_stream->next_sign())
+		{
+			@sign = @{ $sign_scalar };
+			if ($sign[3] == 9) # line end or line start
+			{
+				if ($is_line_start)
+				{
+					$line_counter++;
+
+					if ($line_counter == $line_index_to_insert)
+					{
+						$line_start_sign_char_id = $sign[13];
+
+						last;
+					}
+				}
+
+				$is_line_start = !$is_line_start;
+			}
+
+			$sign_id_before_line = $sign[1];
+			$sign_char_id_before_line = $sign[13];
+		}
+
+		if (!defined $line_start_sign_char_id)
+		{
+			$cgi->print('{"error":"could not find line start"}');
+			return;
+		}
+
+		$stream_id_before_line = query_SQE
+		(
+			$cgi,
+			'first_value',
+
+			<<'MYSQL',
+			SELECT position_in_stream_id FROM position_in_stream
+			JOIN position_in_stream_owner USING (position_in_stream_id)
+			WHERE sign_id = ?
+			AND position_in_stream_owner.scroll_version_id = _scrollversion_
+MYSQL
+
+			$sign_id_before_line
+		);
+
+		$start_break_type = query_SQE
+		(
+			$cgi,
+			'first_value',
+
+			<<'MYSQL',
+			SELECT break_type FROM sign_char
+			JOIN sign_char_owner USING (sign_char_id)
+			WHERE sign_char_id = ?
+			AND sign_char_owner.scroll_version_id = _scrollversion_
+MYSQL
+
+			$line_start_sign_char_id
+		);
+	}
+
+#	$cgi->print('{"data":['
+#	.$stream_id_before_line.','
+#	.$stream_id_after_line.','
+#	.$sign_char_id_before_line.','
+#	.$sign_char_id_after_line.','
+#	.$start_break_type.','
+#	.$end_break_type
+#	.']}');
+
+	return;
+
+
+	# TODO
+	# insert break_type of new line start of saved start combination
+	# change break_type of existing line start to LS
+	# same with end
+	# change next_sign entries: before new line -> new line start -> new line end -> after new line
+
+
+
+
+
+
+
+
+
+#	const previousName = $('#lineName' + lineIndex).text(); // name of previous line
+#
+#				var name = '?';
+#	if (previousName * 1 == previousName) // name is number
+#			{
+#				name = (previousName * 1) + 1; // increment the number (might collide with following line, scholar must handle that)
+#			}
+#	else
+#	{
+#		const lastCharCode = previousName.substr(previousName.length() - 1).charCodeAt(0);
+#
+#		if ((lastCharCode > 96 && lastCharCode < 123)
+#			||  (lastCharCode > 64 && lastCharCode <  91)) // previous name ends with a to y OR A .. Y
+#			{
+#				name = previousName.substr(0, previousName.length() - 1) + String.fromCharCode(lastCharCode + 1);
+#			}
+#		}
+
+
+}
+
+sub remove_line
+{
+	my $cgi = shift;
+	my $dbh = $cgi->dbh;
+	my $line_index_to_remove = $cgi->param('lineIndexToRemove');
+
+	_set_scrollversion($cgi);
+
+	my ($sign_stream, $start_sign_id) = _get_sign_stream_and_start_sign
+	(
+		$dbh,
+		_get_fragment_id_from_canonical_reference_id($cgi)
+	);
+
+	my $sign_scalar;
+	my @sign;
+
+	if ($line_index_to_remove == 0)
+	{
+		my $start_break_type = query_SQE
+		(
+			$cgi,
+			'first_value',
+
+			<<'MYSQL',
+			SELECT break_type FROM sign_char
+			JOIN sign_char_owner USING (sign_char_id)
+			WHERE sign_id = ?
+			AND sign_char_owner.scroll_version_id = _scrollversion_
+MYSQL
+
+			$start_sign_id
+		);
+
+		while ($sign_scalar = $sign_stream->next_sign()) # search for end of line 0
+		{
+			@sign = @{ $sign_scalar };
+
+			if ($sign[3] == 9) # end of line 0
+			{
+				last;
+			}
+		}
+
+		if ($sign_scalar = $sign_stream->next_sign()) # begin of line 1 exists
+		{
+			$cgi->print('{"case":"begin of line 1 exists","start_break_type":"'.$start_break_type.'"}');
+
+			# TODO
+			# copy start break type to line 1
+			# probably remove all signs of 0 from stream => save them while moving towards begin of 1
+			# remove line 0 from line_to_col (needs line_id, from sign_to_line?)
+		}
+		else # line 0 is last one remaining => remove its content, but keep begin & end
+		{
+			$cgi->print('{"case":"line 0 is last one remaining","start_break_type":"'.$start_break_type.'"}');
+
+			# TODO
+			# reduce line 0 to just begin & end
+			# probably remove all signs of 0 from stream
+			# let begin of 0 point to end of 0 => save both sign ids
+		}
+	}
+	else # remove line n (with n > 0)
+	{
+		my $is_line_start = 0;
+		my $line_counter = 0;
+
+		my $sign_id_before_line;
+		my $stream_id_before_line;
+		my $sign_char_id_before_line;
+
+		my $sign_id_at_line_start;
+		my $sign_char_id_at_line_start;
+
+		my $sign_char_id_at_line_end;
+		my $break_type_at_line_end;
+
+		my $sign_id_after_line;
+		my $sign_char_id_after_line;
+
+		my $line_id;
+
+		while ($sign_scalar = $sign_stream->next_sign()) # search for begin of line n
+		{
+			@sign = @{ $sign_scalar };
+
+			if ($sign[3] == 9) # some line end or line start
+			{
+				if ($is_line_start)
+				{
+					$line_counter++;
+
+					if ($line_counter == $line_index_to_remove)
+					{
+						$sign_id_at_line_start = $sign[1];
+						$sign_char_id_at_line_start = $sign[13];
+
+						last;
+					}
+				}
+
+				$is_line_start = !$is_line_start;
+			}
+
+			$sign_id_before_line = $sign[1];
+			$sign_char_id_before_line = $sign[13];
+		}
+
+		while ($sign_scalar = $sign_stream->next_sign()) # search for end of line n
+		{
+			@sign = @{ $sign_scalar };
+
+			if ($sign[3] == 9) # end of line n
+			{
+				$sign_char_id_at_line_end = $sign[13];
+
+				$break_type_at_line_end = query_SQE
+				(
+					$cgi,
+					'first_value',
+
+					<<'MYSQL',
+					SELECT break_type FROM sign_char
+					JOIN sign_char_owner USING (sign_char_id)
+					WHERE sign_char_id = ?
+					AND sign_char_owner.scroll_version_id = _scrollversion_
+MYSQL
+
+					$sign_char_id_at_line_end
+				);
+
+				last;
+			}
+		}
+
+		if ($sign_scalar = $sign_stream->next_sign()) # begin of line n+1 exists
+		{
+			@sign = @{ $sign_scalar };
+
+			$sign_id_after_line = $sign[1];
+			$sign_char_id_after_line = $sign[13];
+
+			$stream_id_before_line = query_SQE
+			(
+				$cgi,
+				'first_value',
+
+				<<'MYSQL',
+				SELECT position_in_stream_id FROM position_in_stream
+				JOIN position_in_stream_owner USING (position_in_stream_id)
+				WHERE sign_id = ?
+				AND position_in_stream_owner.scroll_version_id = _scrollversion_
+MYSQL
+
+				$sign_id_before_line
+			);
+
+			$line_id = query_SQE
+			(
+				$cgi,
+				'first_value',
+
+				<<'MYSQL',
+				SELECT line_id FROM line_to_sign
+				JOIN line_to_sign_owner USING (line_to_sign_id)
+				WHERE sign_id = ?
+				AND line_to_sign_owner.scroll_version_id = _scrollversion_
+MYSQL
+
+				$sign_id_at_line_start
+			);
+
+			$cgi->print
+			(
+				'{'
+				.'"case":"begin of line n+1 exists"'
+				.',"$stream_id_before_line":'.$stream_id_before_line
+				.',"$sign_id_before_line":'.$sign_id_before_line
+				.',"$sign_id_at_line_start":'.$sign_id_at_line_start
+				.',"$sign_id_after_line":'.$sign_id_after_line
+				.',"$sign_char_id_before_line":'.$sign_char_id_before_line
+				.',"$sign_char_id_at_line_start":'.$sign_char_id_at_line_start
+				.',"$sign_char_id_at_line_end":'.$sign_char_id_at_line_end
+				.',"$sign_char_id_after_line":'.$sign_char_id_after_line
+				.',"$line_id":'.$line_id
+				.'}'
+			);
+
+			return;
+
+			# TODO probably remove all signs of line 0 from stream => save them while moving towards begin of 1
+			my @result = $dbh->change_value # change sign stream entry to ignore line
+			(
+				'position_in_stream',
+				$stream_id_before_line,
+				'next_sign',
+				$sign_id_after_line
+			);
+
+			if (defined $result[1])
+			{
+				$cgi->print('{"error":"'.${$result[1]}[1].'","case":"begin of line n+1 exists","situation":"change sign stream entry"}');
+				return;
+			}
+
+			@result = $dbh->remove_entry
+			(
+				'col_to_line',
+				$line_id
+			);
+
+			if (defined $result[1])
+			{
+				$cgi->print('{"error":"'.${$result[1]}[1].'","case":"begin of line n+1 exists","situation":"remove col_to_line entry"}');
+				return;
+			}
+		}
+		else # line n is last one
+		{
+			$cgi->print('{"case":"line n is the last one","$sign_id_before_line":'.$sign_id_before_line.'}');
+
+
+
+
+
+			$cgi->print
+			(
+				'{'
+				.'"case":"begin of line n+1 exists"'
+				.',"$stream_id_before_line":'.$stream_id_before_line
+				.',"$sign_id_before_line":'.$sign_id_before_line
+				.',"$sign_id_at_line_start":'.$sign_id_at_line_start
+				.',"$sign_id_after_line":'.$sign_id_after_line
+				.',"$sign_char_id_before_line":'.$sign_char_id_before_line
+				.',"$sign_char_id_at_line_start":'.$sign_char_id_at_line_start
+				.',"$sign_char_id_at_line_end":'.$sign_char_id_at_line_end
+				.',"$sign_char_id_after_line":'.$sign_char_id_after_line
+				.',"$break_type_at_line_end":"'.$break_type_at_line_end.'"'
+				.',"$line_id":'.$line_id
+				.'}'
+			);
+
+			return;
+
+			my @result = $dbh->change_value # copy break_type end information to previous line
+			(
+				'sign_char',
+				$sign_char_id_before_line,
+				'break_type',
+				$break_type_at_line_end # either (LINE_START,COL_START) or (LINE_START,COL_START,SCROLL_START)
+			);
+
+			if (defined $result[1])
+			{
+				$cgi->print('{"error":"'.${$result[1]}[1].'","case":"begin of line n+1 exists","situation":"copy break type"}');
+				return;
+			}
+
+
+
+			# TODO
+			# reduce line 0 to just begin & end
+			# probably remove all signs of 0 from stream
+			# let begin of 0 point to end of 0 => save both sign ids
+		}
+	}
+
+	return;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		# search for start of line
+
+#	my $sign_id_before_line;
+#	my $stream_id_before_line;
+#	my $sign_char_id_before_line;
+#
+#	my $start_break_type;
+#	if ($line_index_to_remove == 0)
+#	{
+		# stream has no crossfragment connections => x_id_before_line values stay undefined
+
+#		($stream_id_before_line, $sign_id_before_line) = query_SQE # is defined exactly when not begin of scroll
+#		(
+#			$cgi,
+#			'first_array',
+#
+#			<<'MYSQL',
+#			SELECT position_in_stream_id, sign_id FROM position_in_stream
+#			JOIN position_in_stream_owner USING (position_in_stream_id)
+#			WHERE next_sign_id = ?
+#			AND position_in_stream_owner.scroll_version_id = _scrollversion_
+#MYSQL
+#
+#			$start_sign_id
+#		);
+#
+#		if (defined $sign_id_before_line)
+#		{
+#			$sign_char_id_before_line = query_SQE
+#			(
+#				$cgi,
+#				'first_value',
+#
+#				<<'MYSQL',
+#				SELECT sign_char_id FROM sign_char
+#				JOIN sign_char_owner USING (sign_char_id)
+#				WHERE sign_id = ?
+#				AND sign_char_owner.scroll_version_id = _scrollversion_
+#MYSQL
+#
+#				$sign_id_before_line
+#			);
+#		}
+
+#		$start_break_type = query_SQE
+#		(
+#			$cgi,
+#			'first_value',
+#
+#			<<'MYSQL',
+#			SELECT break_type FROM sign_char
+#			JOIN sign_char_owner USING (sign_char_id)
+#			WHERE sign_id = ?
+#			AND sign_char_owner.scroll_version_id = _scrollversion_
+#MYSQL
+#
+#			$start_sign_id
+#		);
+#	}
+#	else # search through stream for begin of nth line (n > 0)
+#	{
+#		my $sign_scalar; # as scalar first for simple check whether existent
+#		my @sign;
+#
+#		my $is_line_start = 0;
+#		my $line_counter = 0;
+#		my $line_start_sign_char_id;
+#
+#		while ($sign_scalar = $sign_stream->next_sign())
+#		{
+#			@sign = @{ $sign_scalar };
+#			if ($sign[3] == 9) # line end or line start
+#			{
+#				if ($is_line_start)
+#				{
+#					$line_counter++;
+#
+#					if ($line_counter == $line_index_to_remove)
+#					{
+#						$line_start_sign_char_id = $sign[13];
+#
+#						last;
+#					}
+#				}
+#
+#				$is_line_start = !$is_line_start;
+#			}
+#
+#			$sign_id_before_line = $sign[1];
+#			$sign_char_id_before_line = $sign[13];
+#		}
+#
+#		if (!defined $line_start_sign_char_id)
+#		{
+#			$cgi->print('{"error":"could not find line start"}');
+#			return;
+#		}
+#
+#		$stream_id_before_line = query_SQE
+#		(
+#			$cgi,
+#			'first_value',
+#
+#			<<'MYSQL',
+#			SELECT position_in_stream_id FROM position_in_stream
+#			JOIN position_in_stream_owner USING (position_in_stream_id)
+#			WHERE sign_id = ?
+#  			AND position_in_stream_owner.scroll_version_id = _scrollversion_
+#MYSQL
+#
+#			$sign_id_before_line
+#		);
+#
+#		$start_break_type = query_SQE
+#		(
+#			$cgi,
+#			'first_value',
+#
+#			<<'MYSQL',
+#			SELECT break_type FROM sign_char
+#			JOIN sign_char_owner USING (sign_char_id)
+#			WHERE sign_char_id = ?
+#	  		AND sign_char_owner.scroll_version_id = _scrollversion_
+#MYSQL
+#
+#			$line_start_sign_char_id
+#		);
+#	}
+
+#	my $start_is_column_start = 0;
+#	my $start_is_scroll_start = 0;
+#
+#	if (index($break_type, 'COLUMN_START') != -1) # line begin is also column begin
+#	{
+#		$start_is_column_start = 1;
+#
+#		if (index($break_type, 'SCROLL_START') != -1) # column begin is also scroll begin
+#		{
+#			$start_is_scroll_start = 1;
+#		}
+#	}
+
+	# search for end of line
+
+#	my $sign_scalar;
+#	my @sign;
+#
+#	my $line_end_sign_char_id;
+#
+#	while ($sign_scalar = $sign_stream->next_sign())
+#	{
+#		@sign = @{ $sign_scalar };
+#
+#		if ($sign[3] == 9) # line end
+#		{
+#			$line_end_sign_char_id = $sign[13];
+#
+#			last;
+#		}
+#	}
+#
+#	if (!defined $line_end_sign_char_id)
+#	{
+#		$cgi->print('{"error":"could not find line end"}');
+#		return;
+#	}
+#
+#	my $end_break_type = query_SQE
+#	(
+#		$cgi,
+#		'first_value',
+#
+#		<<'MYSQL',
+#		SELECT break_type FROM sign_char
+#		JOIN sign_char_owner USING (sign_char_id)
+#		WHERE sign_char_id = ?
+#	  	AND sign_char_owner.scroll_version_id = _scrollversion_
+#MYSQL
+#
+#		$line_end_sign_char_id
+#	);
+
+#	my $end_is_column_end = 0;
+#	my $end_is_scroll_end = 0;
+#
+#	if (index($break_type, 'COLUMN_END') != -1)
+#	{
+#		$end_is_column_end = 1;
+#
+#		if (index($break_type, 'SCROLL_END') != -1)
+#		{
+#			$end_is_scroll_end = 1;
+#		}
+#	}
+
+	# check sign after end of line
+
+#	my $stream_id_after_line;
+#	my $sign_char_id_after_line;
+#
+#	$sign_scalar = $sign_stream->next_sign();
+#	if (defined $sign_scalar)
+#	{
+#		@sign = @{ $sign_scalar };
+#
+#		$stream_id_after_line = query_SQE
+#		(
+#			$cgi,
+#			'first_value',
+#
+#			<<'MYSQL',
+#			SELECT position_in_stream_id FROM position_in_stream
+#			JOIN position_in_stream_owner USING (position_in_stream_id)
+#			WHERE sign_id = ?
+#	  		AND position_in_stream_owner.scroll_version_id = _scrollversion_
+#MYSQL
+#
+#			$sign[1]
+#		);
+#
+#		$sign_char_id_after_line = $sign[13];
+#	}
+#
+#	$cgi->print('{"data":['
+#	.$stream_id_before_line.','
+#	.$stream_id_after_line.','
+#	.$sign_char_id_before_line.','
+#	.$sign_char_id_after_line.','
+#	.$start_break_type.','
+#	.$end_break_type
+##	.$start_is_scroll_start.','
+##	.$end_is_scroll_end
+#	.']}');
+#
+#	return;
+
+
+	# change pointer to bypass 'removed' line
+
+	# apply change_value to let X point to Y
+	#   start was COLUMN_START:
+	#     end was COLUMN_END: remove line, but keep starting & ending break
+	#     end was not COLUMN_END: remove complete line, change_value to add COLUMN_START to Y
+	#     start was SCROLL_START:
+	#       end was SCROLL_END: remove line, but keep starting & ending break (already covered by COLUMN_START & COLUMN_END)
+	#       end was not SCROLL_END: remove complete line, change_value to add SCROLL_START to Y
+	#   start was not COLUMN_START:
+
+
+
+
+
+
+#	my @result;
+#	if (defined $stream_id_before_line
+#	&&  defined $sign_char_id_before_line) # both ids should be defined at the same time (or both undefined)
+#	{
+#		@result = $dbh->change_value
+#		(
+#			'position_in_stream',
+#			$stream_id_before_line,
+#			'next_sign_id',
+#			$stream_id_after_line # might be NULL if entire stream ends after removed line
+#		);
+#
+#		if (defined $result[1])
+#		{
+#			$cgi->print('{"error":"'.${$result[1]}[1].'"}');
+#			return;
+#		}
+#
+#		if ( $start_is_column_start
+#		&&  !$end_is_column_end)
+#		{
+#			my $break_type_string = '(LINE_START,COLUMN_START';
+#
+#			if ( $start_is_scroll_start
+#			&&  !$end_is_scroll_end)
+#			{
+#				$break_type_string .= ',SCROLL_START';
+#			}
+#
+#			$break_type_string .= ')';
+#
+#			@result = $dbh->change_value
+#			(
+#				'sign_char',
+#				$sign_char_id_before_line,
+#				'break_type',
+#				$break_type_string
+#			);
+#
+#			if (defined $result[1])
+#			{
+#				# TODO undo previous change_value to get back to original state
+#				$cgi->print('{"error":"'.${$result[1]}[1].'"}');
+#				return;
+#			}
+#
+#		}
+#		# TODO remove everything relevant in line_to_sign, (probably) col_to_line, (probably) scroll_to_col
+#
+#
+#		my $start_is_column_start = 0;
+#		my $start_is_scroll_start = 0;
+#		my $end_is_column_end = 0;
+#		my $end_is_scroll_end = 0;
+#
+#
+#
+#
+#
+#	}
+#	else
+#	{
+#
+#
+#	}
+#
+#
+#	$json_string .= '}';
+#	$cgi->print($json_string);
+
+
+	# TODO
+	# for testing: only search IDs of LINE_START and LINE_END, determine case
+	# parameters: scrollversion, fragmentId (must be added at load_fragment_text), lineIndex
+	# get sign stream for fragment (and implicitely for given scroll_version)
+	#
+	# move to lineIndexTh LINE_START (sign_char.break_type)
+	#   check if also COLUMN_START (should be redundant with lineIndex == 0, but that's not guaranteed)
+	#   if yes: check also if SCROLL_START
+	#   save sign_id of sign X before this LINE_START (might be null / nonexistent for 1QS 1, 1)
+	# move to next LINE_END
+	#   check if also COLUMN_END
+	#   if yes: check also if SCROLL_END
+	#   save sign_id of sign Y after this LINE_END (might be null)
+	# apply change_value to let X point to Y
+	#   start was COLUMN_START:
+	#     end was COLUMN_END: remove line, but keep starting & ending break
+	#     end was not COLUMN_END: remove complete line, change_value to add COLUMN_START to Y
+	#     start was SCROLL_START:
+	#       end was SCROLL_END: remove line, but keep starting & ending break (already covered by COLUMN_START & COLUMN_END)
+	#       end was not SCROLL_END: remove complete line, change_value to add SCROLL_START to Y
+	#   start was not COLUMN_START:
 }
 
 sub locate_sign
@@ -1451,10 +2284,15 @@ sub main
 	(
 		'login'            => \&login,
 		'loadFragmentText' => \&load_fragment_text,
+
 		'addChar'          => \&add_char,
 		'changeWidth'      => \&change_width,
 		'addAttribute'     => \&add_attribute,
 		'removeAttribute'  => \&remove_attribute,
+
+		'addLine'          => \&add_line,
+		'removeLine'       => \&remove_line,
+
 		'locateSign'       => \&locate_sign
 	);
 	

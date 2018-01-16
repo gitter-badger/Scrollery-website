@@ -44,6 +44,42 @@ function FragmentTextModel()
 		}
 	};
 
+	this.createLine = function(lineIndex, lineName)
+	{
+		this.lineNames.splice
+		(
+			lineIndex,
+			0,
+			lineName
+		);
+
+		// TODO update line names?
+
+		this.text.splice
+		(
+			lineIndex,
+			0,
+			[]
+		);
+	};
+
+	this.removeLine = function(lineIndex)
+	{
+		this.lineNames.splice
+		(
+			lineIndex,
+			1
+		);
+
+		// TODO update line names?
+
+		this.text.splice
+		(
+			lineIndex,
+			1
+		);
+	};
+
 	this.getAlternativeReadings = function(iLine, iSign) // TODO move main sign to begin
 	{
 		const line = this.text[iLine];
@@ -202,7 +238,7 @@ function FragmentTextModel()
 		}
 	};
 
-	this.addSignAfter = function(signData, iLine, iSign)
+	this.addReadingAfter = function(signData, iLine, iSign)
 	{
 		const line = this.text[iLine];
 		for (var i = line.length - 1; i > iSign; i--)
